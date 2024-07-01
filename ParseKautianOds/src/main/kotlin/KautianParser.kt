@@ -1,118 +1,178 @@
-import com.github.miachm.sods.Sheet
-import com.github.miachm.sods.SpreadSheet
-import data.Su
-import java.io.File
+import data.*
+import sheet.*
 
 class KautianParser {
     private var suMutableMap: MutableMap<String, Su> = mutableMapOf()
 
     // return map<subakId, Su>
-    fun parse(f: File): Map<String, Su> {
+    fun parse(kautianSheet: KautianSheet): Map<String, Su> {
         suMutableMap.clear()
 
-        val spreadSheet = SpreadSheet(f)
-        parseSubak(spreadSheet.sheets[0])
-        parseGihang(spreadSheet.sheets[1])
+        parseSubakSheet(kautianSheet.subakSheet)
+        parseGihangSheet(kautianSheet.gihangSheet, kautianSheet.lekuSheet)
+        parseIuliamchoSheet(kautianSheet.iuliamchoSheet)
+        parseHapimliamchoSheet(kautianSheet.hapimliamchoSheet)
+        parseSiokliamchoSheet(kautianSheet.siokliamchoSheet)
+
+        println("KautianParser Oân-sêng!")
 
         return suMutableMap.toMap()
     }
 
-    private fun parseSubak(sheet: Sheet) {
-        printSheetInfo(sheet)
-
-        for (i in 1..<sheet.maxRows) {
-            if (sheet.getRange(i, 0).value.toString().isEmpty()) {
-                break
+    private fun parseSubakSheet(sheet: ArrayList<SubakRow>) {
+        for (i in 0..<sheet.size) {
+            if (sheet[i].subakId.isEmpty()) {
+                continue
             }
 
-            val subakId = (sheet.getRange(i, 0).value as Double).toInt().toString()
-            val subakLuiheng = sheet.getRange(i, 1).value?.toString() ?: ""
-            val hanji = sheet.getRange(i, 2).value.toString()
-            val lomaji = sheet.getRange(i, 3).value?.toString() ?: ""
-            val hunlui = sheet.getRange(i, 4).value?.toString() ?: ""
+            val su = Su()
+            su.subakId = sheet[i].subakId
+            su.subakLuiheng = sheet[i].subakLuiheng
+            su.hanji = sheet[i].hanji.replace("（", "(").replace("）", ")")
+            su.lomaji = sheet[i].lomaji.replace("（", "(").replace("）", ")")
+            su.hunlui = sheet[i].hunlui
 
-            println("subakId: $subakId, hanji: $hanji, lomaji: $lomaji")
-
-            val currentSu = Su
-            currentSu.setSubak(
-                subakId,
-                subakLuiheng,
-                hanji,
-                lomaji,
-                hunlui
-            )
-
-            suMutableMap[currentSu.subakId] = currentSu
+            suMutableMap[su.subakId] = su
         }
     }
 
-    private fun parseGihang(sheet: Sheet) {
-        printSheetInfo(sheet)
+    private fun parseGihangSheet(gihangSheet: ArrayList<GihangRow>, lekuSheet: java.util.ArrayList<LekuRow>) {
+        // Map<gihangId, ArrayList<Leku>>
+        val gihangLekuMap: MutableMap<String, ArrayList<Leku>> = mutableMapOf()
 
-        var currentIndex = 1
-        while (currentIndex < sheet.maxRows) {
-            val stringBuilder = StringBuilder()
-            val currentSubakId: String = (sheet.getRange(currentIndex, 0).value as Double).toInt().toString()
-            val finalGihangIndex = getFinalGihangIndex(sheet, currentIndex)
-            println("currentSubakId: $currentSubakId, currentIndex: $currentIndex, finalGihangIndex: $finalGihangIndex")
+        for (i in 0..<lekuSheet.size) {
+            val leku = Leku()
+            leku.gihangId = lekuSheet[i].gihangId
+            leku.lekuId = lekuSheet[i].lekuId
+            leku.hanji = lekuSheet[i].hanji
+            leku.lomaji = lekuSheet[i].lomaji
+            leku.hoagi = lekuSheet[i].hoagi
 
-            if (finalGihangIndex == currentIndex) {
-                val suseng = sheet.getRange(currentIndex, 2).value?.toString() ?: ""
-                val kaisoeh = sheet.getRange(currentIndex, 3).value?.toString() ?: ""
+            if (gihangLekuMap[leku.gihangId] == null) {
+                gihangLekuMap[leku.gihangId] = ArrayList()
+            }
+            gihangLekuMap[leku.gihangId]!!.add(leku)
+        }
 
-                if (suseng.isEmpty()) {
-                    stringBuilder.append(kaisoeh)
-                } else {
-                    stringBuilder.append("【$suseng】$kaisoeh")
+        for (i in 0..<gihangSheet.size) {
+            val gihang = Gihang()
+            gihang.subakId = gihangSheet[i].subakId
+            gihang.gihangId = gihangSheet[i].gihangId
+            gihang.suseng = gihangSheet[i].suseng
+            gihang.kaisoeh = gihangSheet[i].kaisoeh
+
+            if (gihangLekuMap[gihang.gihangId] != null) {
+                gihang.lekuArrayList.addAll(gihangLekuMap[gihang.gihangId]!!)
+            }
+
+            suMutableMap[gihang.subakId]!!.gihangMap[gihang.gihangId] = gihang
+        }
+
+        suMutableMap.forEach { (subakId, su) ->
+            if (su.gihangMap.isEmpty()) {
+                return@forEach
+            }
+
+            val gihangMergeStringBuilder = StringBuilder()
+            val lekuMergeStringBuilder = StringBuilder()
+            var gihangIndex = 1
+            su.gihangMap.forEach { (gihangId, gihang) ->
+                var susengString = ""
+                if (gihang.suseng.isNotEmpty()) {
+                    susengString = "【${gihang.suseng}】"
                 }
-            } else {
-                val firstGihangId = (sheet.getRange(currentIndex, 1).value as Double).toInt()
-                for (i in currentIndex..<finalGihangIndex + 1) {
-                    val gihangId = (sheet.getRange(i, 1).value as Double).toInt()
-                    val suseng = sheet.getRange(i, 2).value?.toString() ?: ""
-                    val kaisoeh = sheet.getRange(i, 3).value?.toString() ?: ""
+                gihangMergeStringBuilder.append("($gihangIndex) $susengString${gihang.kaisoeh}")
+                if (gihangIndex < su.gihangMap.size) {
+                    gihangMergeStringBuilder.append("\n")
+                }
 
-                    val currentGihangNumber = gihangId - firstGihangId + 1
-
-                    if (suseng.isEmpty()) {
-                        stringBuilder.append("$currentGihangNumber. $kaisoeh")
-                    } else {
-                        stringBuilder.append("$currentGihangNumber.【$suseng】$kaisoeh")
+                if (gihang.lekuArrayList.isNotEmpty()) {
+                    val lekuStringBuilder = StringBuilder()
+                    for (i in 0..<gihang.lekuArrayList.size) {
+                        val leku = gihang.lekuArrayList[i]
+                        lekuStringBuilder.append("${leku.hanji} ${leku.lomaji} 『${leku.hoagi}』")
+                        if (i < gihang.lekuArrayList.size - 1) {
+                            lekuStringBuilder.append("；")
+                        }
                     }
-                    if (i < finalGihangIndex) {
-                        stringBuilder.append("\n")
+
+                    lekuMergeStringBuilder.append("($gihangIndex) $lekuStringBuilder")
+                    if (gihangIndex < su.gihangMap.size) {
+                        lekuMergeStringBuilder.append("\n")
                     }
                 }
+
+                gihangIndex++
             }
 
-            val currentSu = suMutableMap[currentSubakId]
-            currentSu!!.setGihang(stringBuilder.toString())
-
-            println(stringBuilder.toString())
-
-            currentIndex = finalGihangIndex + 1
+            su.gihangMergedString = gihangMergeStringBuilder.toString()
+            su.lekuMergedString = lekuMergeStringBuilder.toString()
         }
     }
 
-    private fun getFinalGihangIndex(sheet: Sheet, currentIndex: Int): Int {
-        var foundIndex = currentIndex
+    private fun parseIuliamchoSheet(sheet: ArrayList<IuliamchoRow>) {
+        for (i in 0..<sheet.size) {
+            val iuliamcho = Iuliamcho()
+            iuliamcho.subakId = sheet[i].subakId
+            iuliamcho.hanji = sheet[i].hanji.replace("（", "(").replace("）", ")")
+            iuliamcho.lomaji = sheet[i].lomaji.replace("（", "(").replace("）", ")")
 
-        val currentGihangSubokId = (sheet.getRange(currentIndex, 0).value as Double).toInt().toString()
-        for (i in currentIndex + 1..<sheet.maxRows) {
-            val nextGihangSubokId = (sheet.getRange(i, 0).value as Double).toInt().toString()
-            if (nextGihangSubokId == currentGihangSubokId) {
-                foundIndex = i
+            val su = suMutableMap[iuliamcho.subakId]
+            if (su == null) {
+                println("parseIuliamchoSheet(): su == null, ${iuliamcho.subakId}, ${iuliamcho.hanji}, ${iuliamcho.lomaji}")
+                continue
             }
-        }
 
-        return foundIndex
+            su.iuliamchoArrayList.add(iuliamcho)
+
+            su.hanji = su.hanji.replace("/", "(又唸作)/")
+            su.lomaji = su.lomaji.replace("/", "(又唸作)/")
+            su.hanji += "/${iuliamcho.hanji}(又唸作)"
+            su.lomaji += "/${iuliamcho.lomaji}(又唸作)"
+        }
     }
 
-    private fun printSheetInfo(sheet: Sheet) {
-        println("----------------------------------------")
-        println("Sheet name: ${sheet.name}")
-        println("Sheet row amount: ${sheet.maxRows}")
-        println("Sheet column amount: ${sheet.maxColumns}")
-        println("----------------------------------------")
+    private fun parseHapimliamchoSheet(sheet: ArrayList<HapimliamchoRow>) {
+        for (i in 0..<sheet.size) {
+            val hapimliamcho = Hapimliamcho()
+            hapimliamcho.subakId = sheet[i].subakId
+            hapimliamcho.hanji = sheet[i].hanji.replace("（", "(").replace("）", ")")
+            hapimliamcho.lomaji = sheet[i].lomaji.replace("（", "(").replace("）", ")")
+
+            val su = suMutableMap[hapimliamcho.subakId]
+            if (su == null) {
+                println("parseHapimliamchoSheet(): su == null, ${hapimliamcho.subakId}, ${hapimliamcho.hanji}, ${hapimliamcho.lomaji}")
+                continue
+            }
+
+            su.hapimliamchoArrayList.add(hapimliamcho)
+
+            su.hanji = su.hanji.replace("/", "(合音唸作)/")
+            su.lomaji = su.lomaji.replace("/", "(合音唸作)/")
+            su.hanji += "/${hapimliamcho.hanji}(合音唸作)"
+            su.lomaji += "/${hapimliamcho.lomaji}(合音唸作)"
+        }
+    }
+
+    private fun parseSiokliamchoSheet(sheet: ArrayList<SiokliamchoRow>) {
+        for (i in 0..<sheet.size) {
+            val siokliamcho = Siokliamcho()
+            siokliamcho.subakId = sheet[i].subakId
+            siokliamcho.hanji = sheet[i].hanji.replace("（", "(").replace("）", ")")
+            siokliamcho.lomaji = sheet[i].lomaji.replace("（", "(").replace("）", ")")
+
+            val su = suMutableMap[siokliamcho.subakId]
+            if (su == null) {
+                println("parseSiokliamchoSheet(): su == null, ${siokliamcho.subakId}, ${siokliamcho.hanji}, ${siokliamcho.lomaji}")
+                continue
+            }
+
+            su.siokliamchoArrayList.add(siokliamcho)
+
+            su.hanji = su.hanji.replace("/", "(俗唸作)/")
+            su.lomaji = su.lomaji.replace("/", "(俗唸作)/")
+            su.hanji += "/${siokliamcho.hanji}(俗唸作)"
+            su.lomaji += "/${siokliamcho.lomaji}(俗唸作)"
+        }
     }
 }

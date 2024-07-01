@@ -16,6 +16,7 @@ dependencies {
     testImplementation(kotlin("test"))
 
     implementation("com.github.miachm.sods:SODS:1.6.7")
+    implementation("com.github.doyaaaaaken:kotlin-csv-jvm:1.9.3") // for JVM platform
 }
 
 tasks.test {

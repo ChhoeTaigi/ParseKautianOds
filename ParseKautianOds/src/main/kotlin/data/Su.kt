@@ -1,6 +1,6 @@
 package data
 
-object Su {
+class Su {
     // 詞目
     lateinit var subakId: String
     lateinit var subakLuiheng: String
@@ -9,17 +9,19 @@ object Su {
     lateinit var hunlui: String
 
     // 義項
-    lateinit var gihangMergedString: String
+    // Map<gihangId, Gihang>
+    val gihangMap: MutableMap<String, Gihang> = mutableMapOf()
+    var gihangMergedString: String = ""
 
-    fun setSubak(subakId: String, subakLuiheng: String, hanji: String, lomaji: String, hunlui: String) {
-        Su.subakId = subakId
-        Su.subakLuiheng = subakLuiheng
-        Su.hanji = hanji
-        Su.lomaji = lomaji
-        Su.hunlui = hunlui
-    }
+    // 例句
+    var lekuMergedString: String = ""
 
-    fun setGihang(gihang: String) {
-        Su.gihangMergedString = gihang
-    }
+    // 又唸作
+    val iuliamchoArrayList = ArrayList<Iuliamcho>()
+
+    // 合音唸作
+    val hapimliamchoArrayList = ArrayList<Hapimliamcho>()
+
+    // 俗唸作
+    val siokliamchoArrayList = ArrayList<Siokliamcho>()
 }
